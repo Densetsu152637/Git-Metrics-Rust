@@ -1,3 +1,7 @@
+# Personal agents files
+agents.*.md
+.agents/
+
 dist
 dist-*
 cabal-dev
@@ -21,4 +25,3 @@ cabal.project.local
 cabal.project.local~
 .HTF/
 .ghc.environment.*
-agents.md
