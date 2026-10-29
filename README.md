@@ -44,6 +44,45 @@ a directory name.
 All analysis requests must also include `X-Git-Api-Key` with the configured
 `GIT_API_TOKEN`. `GET /health` is the only unauthenticated application endpoint.
 
+## Running the service
+
+The service is a Rust binary. Git must be installed.
+
+```
+cargo run --release
+```
+
+It listens on `0.0.0.0:8081` (and, on Unix, on the Unix socket
+`/tmp/haskell-ipc.sock`). A container image is built from `Dockerfile`; it runs as
+a non-root user, includes Git and CA certificates, and exposes a health probe on
+`GET /health`.
+
+Configuration is read from environment variables:
+
+| Variable | Meaning |
+| --- | --- |
+| `GIT_API_TOKEN` | Required value of the `X-Git-Api-Key` header. When unset, requests are not authenticated. A set but empty value still requires an (empty) header. |
+| `NODE_ENV` | With `production`, startup fails unless `GIT_API_TOKEN` is at least 32 bytes. |
+| `GIT_ALLOWED_HOSTS` | Comma-separated repository hosts (default `github.com,gitlab.com,bitbucket.org`). An empty list fails startup. |
+
+Checks used by CI: `cargo fmt --check`, `cargo clippy --locked --all-targets -- -D warnings`,
+`cargo test --locked`, and `cargo build --locked --release`. See
+[docs/architecture.md](docs/architecture.md) for the design and compatibility notes.
+
+## Protocol summary
+
+- **HTTP**: `POST` to any path with a JSON body of at most 8192 bytes
+  (`{"url": "...", "auth_token": "..."}`; `auth_token` is optional). Success is
+  `200` with `{"type":"value","data":<RepositoryData>}`. Errors are
+  `{"type":"error","message":"..."}`: `401` unauthorized, `400` oversized or
+  invalid JSON, `500` analysis failures (message prefixed with `err: `). Other
+  methods with a valid key get `405`.
+- **WebSocket**: upgrade on any path with the API key header, then send one text
+  or binary message with the same JSON payload. The service streams
+  `{"type":"text_update","data":"..."}` progress messages, then a
+  `{"type":"value",...}` result or an `error` envelope, and closes with reason
+  `Done` (`Bad input` for malformed requests).
+
 # How our code interfaces with the API
 
 # HTTP
@@ -59,7 +98,7 @@ fetch("http://" + API_CONN_ENDPOINT, {
         },
         body: JSON.stringify({ url, auth_token }),
     }).then((response) => {
-        if (!response.ok) reject(`Haskell API returned status ${response.status}`);
+        if (!response.ok) reject(`API returned status ${response.status}`);
         response.json().then((d) => resolve(d.data));
     })
 ```
@@ -154,7 +193,7 @@ This is the type that will be sent to you:
 
 ```
 type RepositoryData = Readonly<{
-    name: string;
+    repoName: string;
     branches: BranchData[];
     allCommits: Map<string, CommitData>;
     contributors: Map<string, ContributorData>;

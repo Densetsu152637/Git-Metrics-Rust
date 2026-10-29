@@ -1,8 +1,7 @@
 .git
 .github
 .stack-work
-dist
-dist-*
-*.hi
-*.o
+target
+docs
+tests
 Dockerfile*
