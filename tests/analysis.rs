@@ -112,7 +112,15 @@ async fn formulates_commit_branch_and_contributor_metrics() {
 
     // Modify + add + binary.
     let modify = &data.all_commits[fixture.hash("modify")];
-    assert_eq!(modify.timestamp, "2024-01-02T00:00:00+00:00");
+    // Git's strict ISO format (`%cI`) prints UTC as `+00:00` or, in newer Git, `Z`.
+    assert!(
+        matches!(
+            modify.timestamp.as_str(),
+            "2024-01-02T00:00:00+00:00" | "2024-01-02T00:00:00Z"
+        ),
+        "{}",
+        modify.timestamp
+    );
     let files: Vec<_> = modify
         .file_data
         .iter()
